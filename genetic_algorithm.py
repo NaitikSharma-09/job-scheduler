@@ -1,4 +1,6 @@
 import random
+from multiprocessing import Pool
+
 
 def create_population(jobs, size=5):
     population = []
@@ -16,10 +18,16 @@ def fitness(schedule, num_cpus=2):
         cpu_index = i % num_cpus
         cpu_times[cpu_index] += job.execution_time
 
-    return max(cpu_times)  # minimize this
+    makespan = max(cpu_times)
+    imbalance = max(cpu_times) - min(cpu_times)
 
+    return makespan + imbalance  # lower is better
+    return max(cpu_times)  # minimize this
 def select_best(population, num_cpus):
-    return sorted(population, key=lambda s: fitness(s, num_cpus))[:2]
+    scores = parallel_fitness(population, num_cpus)
+    paired = list(zip(population, scores))
+    paired.sort(key=lambda x: x[1])
+    return [p[0] for p in paired[:4]]
 
 def crossover(parent1, parent2):
     point = len(parent1) // 2
@@ -33,6 +41,15 @@ def crossover(parent1, parent2):
 
 
 def mutate(schedule):
-    i, j = random.sample(range(len(schedule)), 2)
-    schedule[i], schedule[j] = schedule[j], schedule[i]
+    import random
+
+    if random.random() < 0.5:
+        i, j = random.sample(range(len(schedule)), 2)
+        schedule[i], schedule[j] = schedule[j], schedule[i]
     return schedule
+    from multiprocessing import Pool
+
+def parallel_fitness(population, num_cpus):
+    with Pool() as pool:
+        scores = pool.starmap(fitness, [(ind, num_cpus) for ind in population])
+    return scores
