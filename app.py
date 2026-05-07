@@ -8,24 +8,147 @@ import os
 app = Flask(__name__)
 
 HTML = """
-<h1>🧬 Genetic Job Scheduler</h1>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Genetic Scheduler Dashboard</title>
 
-<form method="post">
-    Jobs: <input type="number" name="jobs" value="10"><br><br>
-    CPUs: <input type="number" name="cpus" value="2"><br><br>
-    <button type="submit">Run</button>
-</form>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: white;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+        }
 
-{% if result %}
-<h2>Result:</h2>
-<pre>{{ result }}</pre>
+        .container {
+            max-width: 1000px;
+            margin: auto;
+        }
 
-<h2>📊 CPU Load</h2>
-<img src="/static/cpu_load.png" width="400">
+        h1 {
+            text-align: center;
+            color: #38bdf8;
+            margin-bottom: 30px;
+        }
 
-<h2>📈 Evolution</h2>
-<img src="/static/evolution.png" width="400">
-{% endif %}
+        .card {
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+
+        input {
+            padding: 10px;
+            width: 100%;
+            margin-top: 10px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border: none;
+            background: #334155;
+            color: white;
+        }
+
+        button {
+            background: #38bdf8;
+            color: black;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+        }
+
+        button:hover {
+            background: #0ea5e9;
+        }
+
+        pre {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 10px;
+            overflow-x: auto;
+        }
+
+        .graphs {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .graphs img {
+            width: 450px;
+            border-radius: 12px;
+            background: white;
+            padding: 10px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>🧬 Genetic Algorithm Scheduler</h1>
+
+    <div class="card">
+        <form method="post">
+
+            <label>Number of Jobs</label>
+            <input type="number" name="jobs" value="10">
+
+            <label>Number of CPUs</label>
+            <input type="number" name="cpus" value="2">
+
+            <button type="submit">Run Scheduler</button>
+
+        </form>
+    </div>
+
+    {% if result %}
+
+    <div class="card">
+        <h2>📋 Scheduling Result</h2>
+        <pre>{{ result }}</pre>
+    </div>
+
+    <div class="card">
+        <h2>📊 Analytics</h2>
+
+        <div class="graphs">
+            <div>
+                <h3>CPU Load</h3>
+                <img src="/static/cpu_load.png">
+            </div>
+
+            <div>
+                <h3>Evolution Graph</h3>
+                <img src="/static/evolution.png">
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+
+    <div class="footer">
+        Built with Python, Flask & Genetic Algorithms 🚀
+    </div>
+
+</div>
+
+</body>
+</html>
 """
 
 @app.route("/", methods=["GET", "POST"])
