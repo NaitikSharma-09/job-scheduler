@@ -1,5 +1,6 @@
-from genetic_algorithm import create_population, select_best, crossover, mutate, fitness
 import random
+
+from genetic_algorithm import create_population, select_best, crossover, fitness, mutate
 
 def genetic_schedule(jobs, num_cpus=2):
     population = create_population(jobs, size=20)
@@ -22,15 +23,17 @@ def genetic_schedule(jobs, num_cpus=2):
 
     return sorted(population, key=lambda s: fitness(s, num_cpus))[0]
 
-def genetic_schedule_live(jobs, num_cpus=2):
+def genetic_schedule_live(jobs, num_cpus=2, on_generation=None):
     population = create_population(jobs, size=20)
     history = []
 
-    for _ in range(50):
+    for generation in range(50):
         best = select_best(population, num_cpus)
 
         best_score = fitness(best[0], num_cpus)
         history.append(best_score)
+        if on_generation:
+            on_generation(generation, best_score)
 
         new_population = best[:]
 

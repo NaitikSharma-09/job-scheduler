@@ -1,157 +1,93 @@
-from flask import Flask, render_template_string, request
+import os
+import random
+from functools import wraps
+
+import matplotlib.pyplot as plt
+from flask import Flask, jsonify, redirect, render_template_string, request, session, url_for
+from flask_socketio import SocketIO
+
 from job import Job
 from scheduler import genetic_schedule_live
-import random
-import matplotlib.pyplot as plt
-import os
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+USERS = {"admin": {"password": "admin123"}}
+
+
+def is_authenticated():
+    return bool(session.get("user_id"))
+
+
+def login_required(view_fn):
+    @wraps(view_fn)
+    def wrapper(*args, **kwargs):
+        if not is_authenticated():
+            if request.path.startswith("/api/"):
+                return jsonify({"ok": False, "error": "Unauthorized"}), 401
+            return redirect(url_for("login"))
+        return view_fn(*args, **kwargs)
+
+    return wrapper
+
+
+def predict_priority_label(execution_time, memory):
+    # Lightweight rules approximating a simple classifier.
+    score = execution_time * 0.7 + memory * 0.3
+    if score >= 5:
+        return "High"
+    if score >= 3:
+        return "Medium"
+    return "Low"
 
 HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Genetic Scheduler Dashboard</title>
+<h1>🧬 Genetic Job Scheduler</h1>
+<p>
+{% if current_user.is_authenticated %}
+Logged in as <b>{{ current_user.id }}</b> |
+<a href="/dashboard">Dashboard</a> |
+<a href="/logout">Logout</a>
+{% else %}
+<a href="/login">Login</a>
+{% endif %}
+</p>
 
-    <style>
-        body {
-            background-color: #0f172a;
-            color: white;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 40px;
-        }
+<form method="post">
+    Jobs: <input type="number" name="jobs" value="10"><br><br>
+    CPUs: <input type="number" name="cpus" value="2"><br><br>
+    <button type="submit">Run</button>
+</form>
 
-        .container {
-            max-width: 1000px;
-            margin: auto;
-        }
+{% if result %}
+<h2>Result:</h2>
+<pre>{{ result }}</pre>
+<h3>Live Genetic Updates</h3>
+<pre id="live-feed">Waiting for next run...</pre>
 
-        h1 {
-            text-align: center;
-            color: #38bdf8;
-            margin-bottom: 30px;
-        }
+<h2>📊 CPU Load</h2>
+<img src="/static/cpu_load.png" width="400">
 
-        .card {
-            background: #1e293b;
-            padding: 25px;
-            border-radius: 15px;
-            margin-bottom: 25px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
-        }
+<h2>📈 Evolution</h2>
+<img src="/static/evolution.png" width="400">
+{% endif %}
 
-        input {
-            padding: 10px;
-            width: 100%;
-            margin-top: 10px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            border: none;
-            background: #334155;
-            color: white;
-        }
-
-        button {
-            background: #38bdf8;
-            color: black;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: bold;
-            width: 100%;
-        }
-
-        button:hover {
-            background: #0ea5e9;
-        }
-
-        pre {
-            background: #0f172a;
-            padding: 15px;
-            border-radius: 10px;
-            overflow-x: auto;
-        }
-
-        .graphs {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .graphs img {
-            width: 450px;
-            border-radius: 12px;
-            background: white;
-            padding: 10px;
-        }
-
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            color: #94a3b8;
-        }
-    </style>
-</head>
-
-<body>
-
-<div class="container">
-
-    <h1>🧬 Genetic Algorithm Scheduler</h1>
-
-    <div class="card">
-        <form method="post">
-
-            <label>Number of Jobs</label>
-            <input type="number" name="jobs" value="10">
-
-            <label>Number of CPUs</label>
-            <input type="number" name="cpus" value="2">
-
-            <button type="submit">Run Scheduler</button>
-
-        </form>
-    </div>
-
-    {% if result %}
-
-    <div class="card">
-        <h2>📋 Scheduling Result</h2>
-        <pre>{{ result }}</pre>
-    </div>
-
-    <div class="card">
-        <h2>📊 Analytics</h2>
-
-        <div class="graphs">
-            <div>
-                <h3>CPU Load</h3>
-                <img src="/static/cpu_load.png">
-            </div>
-
-            <div>
-                <h3>Evolution Graph</h3>
-                <img src="/static/evolution.png">
-            </div>
-        </div>
-    </div>
-
-    {% endif %}
-
-    <div class="footer">
-        Built with Python, Flask & Genetic Algorithms 🚀
-    </div>
-
-</div>
-
-</body>
-</html>
+<script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+<script>
+const socket = io();
+const liveFeed = document.getElementById("live-feed");
+const lines = [];
+socket.on("update_graph", (data) => {
+  const line = `Generation ${data.generation}: fitness ${data.fitness}`;
+  lines.push(line);
+  if (lines.length > 20) lines.shift();
+  if (liveFeed) liveFeed.textContent = lines.join("\\n");
+});
+</script>
 """
 
 @app.route("/", methods=["GET", "POST"])
+@login_required
 def home():
     result = None
 
@@ -161,7 +97,15 @@ def home():
 
         jobs = [Job(i, random.randint(1, 10)) for i in range(1, num_jobs + 1)]
 
-        best_schedule, history = genetic_schedule_live(jobs, num_cpus)
+        def on_generation(generation, best_score):
+            socketio.emit(
+                "update_graph",
+                {"generation": generation, "fitness": best_score},
+            )
+
+        best_schedule, history = genetic_schedule_live(
+            jobs, num_cpus, on_generation=on_generation
+        )
 
         cpu_times = [0] * num_cpus
         output = ""
@@ -201,8 +145,98 @@ def home():
         plt.savefig("static/evolution.png")
         plt.clf()
 
-    return render_template_string(HTML, result=result)
+    current_user = {"is_authenticated": is_authenticated(), "id": session.get("user_id")}
+    return render_template_string(HTML, result=result, current_user=current_user)
+
+
+@app.route("/run")
+@login_required
+def run_scheduler():
+    num_jobs = int(request.args.get("jobs", 10))
+    num_cpus = int(request.args.get("cpus", 2))
+    jobs = [Job(i, random.randint(1, 10)) for i in range(1, num_jobs + 1)]
+    best_schedule, _ = genetic_schedule_live(jobs, num_cpus)
+    output = [f"CPU {(i % num_cpus) + 1} -> Job {job.id} ({job.execution_time}s)" for i, job in enumerate(best_schedule)]
+    return {"result": "\n".join(output)}
+
+
+@app.route("/api/run")
+@login_required
+def api_run_scheduler():
+    return run_scheduler()
+
+
+@app.route("/api/predict-priority", methods=["POST"])
+@login_required
+def predict_priority():
+    payload = request.get_json(silent=True) or {}
+    execution_time = float(payload.get("execution_time", 1))
+    memory = float(payload.get("memory", 1))
+    prediction = predict_priority_label(execution_time, memory)
+    return jsonify(
+        {
+            "execution_time": execution_time,
+            "memory": memory,
+            "predicted_priority": prediction,
+        }
+    )
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    return "Protected"
+
+
+LOGIN_HTML = """
+<h2>Login</h2>
+<form method="post">
+  Username: <input name="username" value="admin"><br><br>
+  Password: <input name="password" type="password" value="admin123"><br><br>
+  <button type="submit">Login</button>
+</form>
+{% if error %}<p style="color:red;">{{ error }}</p>{% endif %}
+"""
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        user = USERS.get(username)
+        if user and user["password"] == password:
+            session["user_id"] = username
+            return redirect(url_for("home"))
+        return render_template_string(LOGIN_HTML, error="Invalid credentials")
+    return render_template_string(LOGIN_HTML, error=None)
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    payload = request.get_json(silent=True) or {}
+    username = payload.get("username", "")
+    password = payload.get("password", "")
+    user = USERS.get(username)
+    if user and user["password"] == password:
+        session["user_id"] = username
+        return jsonify({"ok": True, "user": username})
+    return jsonify({"ok": False, "error": "Invalid credentials"}), 401
+
+
+@app.route("/logout")
+@login_required
+def logout():
+    session.pop("user_id", None)
+    return redirect(url_for("login"))
+
+
+@app.route("/api/logout", methods=["POST"])
+@login_required
+def api_logout():
+    session.pop("user_id", None)
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
- app.run(debug=True, port=5001)
+    socketio.run(app, debug=True)
