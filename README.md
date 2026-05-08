@@ -29,15 +29,34 @@ This project implements a job scheduling system using a Genetic Algorithm to opt
 
 ## ▶️ Run the project
 
+### 1) Backend setup
+
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-python3 main.py
+```
 
----
-
-## 🔷 4. Push to GitHub
+### 2) Run CLI scheduler
 
 ```bash
-git add .
-git commit -m "added visualization and README"
-git push
+python3 main.py
+```
+
+### 3) Run web app
+
+```bash
+python3 app.py
+```
+
+Open `http://127.0.0.1:5000/login` and log in with:
+- username: `admin`
+- password: `admin123`
+
+### 4) Frontend (optional)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
