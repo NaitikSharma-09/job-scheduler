@@ -26,6 +26,7 @@ def genetic_schedule(jobs, num_cpus=2):
 def genetic_schedule_live(jobs, num_cpus=2, on_generation=None):
     population = create_population(jobs, size=20)
     history = []
+    best = select_best(population, num_cpus)
 
     for generation in range(50):
         best = select_best(population, num_cpus)

@@ -9,7 +9,7 @@ const api = axios.create({
 
 function App() {
   const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [password, setPassword] = useState("123456");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [result, setResult] = useState("");
   const [live, setLive] = useState([]);
@@ -35,10 +35,16 @@ function App() {
   const login = async () => {
     setError("");
     try {
-      await api.post("/api/login", { username, password });
+      await api.post("/api/login", {
+        username: username.trim(),
+        password: password.trim(),
+      });
       setIsLoggedIn(true);
     } catch (err) {
-      setError(err.response?.data?.error || "Login failed");
+      setError(
+        err.response?.data?.error ||
+          "Login failed. Ensure backend is running on port 5000.",
+      );
     }
   };
 

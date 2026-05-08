@@ -11,9 +11,9 @@ from scheduler import genetic_schedule_live
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-me")
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-USERS = {"admin": {"password": "admin123"}}
+USERS = {"admin": {"password": "123456"}}
 
 
 def is_authenticated():
@@ -40,6 +40,14 @@ def predict_priority_label(execution_time, memory):
     if score >= 3:
         return "Medium"
     return "Low"
+
+
+def parse_positive_int(value, fallback):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed if parsed > 0 else fallback
 
 HTML = """
 <h1>🧬 Genetic Job Scheduler</h1>
@@ -92,8 +100,8 @@ def home():
     result = None
 
     if request.method == "POST":
-        num_jobs = int(request.form["jobs"])
-        num_cpus = int(request.form["cpus"])
+        num_jobs = parse_positive_int(request.form.get("jobs"), 10)
+        num_cpus = parse_positive_int(request.form.get("cpus"), 2)
 
         jobs = [Job(i, random.randint(1, 10)) for i in range(1, num_jobs + 1)]
 
@@ -152,8 +160,8 @@ def home():
 @app.route("/run")
 @login_required
 def run_scheduler():
-    num_jobs = int(request.args.get("jobs", 10))
-    num_cpus = int(request.args.get("cpus", 2))
+    num_jobs = parse_positive_int(request.args.get("jobs"), 10)
+    num_cpus = parse_positive_int(request.args.get("cpus"), 2)
     jobs = [Job(i, random.randint(1, 10)) for i in range(1, num_jobs + 1)]
     best_schedule, _ = genetic_schedule_live(jobs, num_cpus)
     output = [f"CPU {(i % num_cpus) + 1} -> Job {job.id} ({job.execution_time}s)" for i, job in enumerate(best_schedule)]
@@ -170,8 +178,14 @@ def api_run_scheduler():
 @login_required
 def predict_priority():
     payload = request.get_json(silent=True) or {}
-    execution_time = float(payload.get("execution_time", 1))
-    memory = float(payload.get("memory", 1))
+    try:
+        execution_time = float(payload.get("execution_time", 1))
+        memory = float(payload.get("memory", 1))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "execution_time and memory must be numbers"}), 400
+
+    if execution_time <= 0 or memory <= 0:
+        return jsonify({"ok": False, "error": "execution_time and memory must be > 0"}), 400
     prediction = predict_priority_label(execution_time, memory)
     return jsonify(
         {
@@ -192,7 +206,7 @@ LOGIN_HTML = """
 <h2>Login</h2>
 <form method="post">
   Username: <input name="username" value="admin"><br><br>
-  Password: <input name="password" type="password" value="admin123"><br><br>
+  Password: <input name="password" type="password" value="123456"><br><br>
   <button type="submit">Login</button>
 </form>
 {% if error %}<p style="color:red;">{{ error }}</p>{% endif %}

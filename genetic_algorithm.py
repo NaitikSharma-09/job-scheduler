@@ -1,5 +1,4 @@
 import random
-from multiprocessing import Pool
 
 
 def create_population(jobs, size=5):
@@ -50,6 +49,4 @@ def mutate(schedule):
     from multiprocessing import Pool
 
 def parallel_fitness(population, num_cpus):
-    with Pool() as pool:
-        scores = pool.starmap(fitness, [(ind, num_cpus) for ind in population])
-    return scores
+    return [fitness(individual, num_cpus) for individual in population]

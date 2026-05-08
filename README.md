@@ -51,7 +51,7 @@ python3 app.py
 
 Open `http://127.0.0.1:5000/login` and log in with:
 - username: `admin`
-- password: `admin123`
+- password: `123456`
 
 ### 4) Frontend (optional)
 
